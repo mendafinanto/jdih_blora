@@ -26,6 +26,9 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.os.Handler;
+import android.os.Looper;
+import java.io.File;
 
 public class MainActivity extends Activity {
     private static final String HOME = "https://jdih.blorakab.go.id/mobile";
@@ -37,6 +40,9 @@ public class MainActivity extends Activity {
     private String lastPageUrl = HOME;
     private SharedPreferences preferences;
     private boolean offlineModeLoaded = false;
+    private boolean loadingOfflineArchive = false;
+    private final Handler archiveHandler = new Handler(Looper.getMainLooper());
+    private static final String ARCHIVE_NAME = "jdih-home.mhtml";
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -86,9 +92,14 @@ public class MainActivity extends Activity {
                 if (url.startsWith("https://jdih.blorakab.go.id")) {
                     tryingCachedHome = false;
                     offlineModeLoaded = false;
+                    loadingOfflineArchive = false;
                     lastPageUrl = url;
                     preferences.edit().putString("last_page_url", url).apply();
                     view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                    if (isHomePage(url)) scheduleHomeArchive();
+                } else if (url.startsWith("file://")) {
+                    hideOffline();
+                    hideLoading();
                 }
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
@@ -210,18 +221,87 @@ public class MainActivity extends Activity {
             webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
             webView.loadUrl(HOME);
         } else {
-            showOfflineHome();
+            loadSavedHomeOrBundled();
         }
     }
 
-    private void handleMainFrameError() {
-        if (!offlineModeLoaded) showOfflineHome();
+    private boolean isHomePage(String url) {
+        try {
+            Uri uri = Uri.parse(url);
+            String path = uri.getPath() == null ? "" : uri.getPath();
+            return "jdih.blorakab.go.id".equalsIgnoreCase(uri.getHost())
+                    && ("/mobile".equals(path) || "/mobile/".equals(path));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
-    // Beranda offline disimpan sebagai file HTML di dalam APK, bukan mengandalkan cache server.
-    private void showOfflineHome() {
+    // Simpan salinan beranda asli, termasuk berita, daftar produk, stylesheet, dan gambar
+    // yang sudah dimuat WebView, sebagai arsip MHTML di penyimpanan internal aplikasi.
+    private void scheduleHomeArchive() {
+        archiveHandler.removeCallbacksAndMessages(null);
+        archiveHandler.postDelayed(() -> {
+            if (webView == null || isFinishing() || offlineModeLoaded) return;
+            webView.evaluateJavascript(
+                    "(function(){document.querySelectorAll('img[loading=lazy]').forEach(function(i){i.loading='eager';});return true;})()",
+                    value -> archiveHandler.postDelayed(this::saveHomeArchive, 1800)
+            );
+        }, 2200);
+    }
+
+    private void saveHomeArchive() {
+        if (webView == null || offlineModeLoaded || !hasConnection()) return;
+        File temp = new File(getFilesDir(), "jdih-home-temp.mhtml");
+        File saved = new File(getFilesDir(), ARCHIVE_NAME);
+        if (temp.exists()) temp.delete();
+        webView.saveWebArchive(temp.getAbsolutePath(), false, path -> {
+            if (path != null && temp.exists() && temp.length() > 0) {
+                if (saved.exists()) saved.delete();
+                if (!temp.renameTo(saved)) {
+                    try {
+                        java.io.InputStream in = new java.io.FileInputStream(temp);
+                        java.io.OutputStream out = new java.io.FileOutputStream(saved);
+                        byte[] buffer = new byte[8192];
+                        int count;
+                        while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
+                        in.close();
+                        out.close();
+                        temp.delete();
+                    } catch (Exception ignored) { }
+                }
+                preferences.edit().putLong("home_archive_saved_at", System.currentTimeMillis()).apply();
+            }
+        });
+    }
+
+    private void handleMainFrameError() {
+        if (loadingOfflineArchive) {
+            loadingOfflineArchive = false;
+            showBundledOfflineHome();
+        } else if (!offlineModeLoaded) {
+            loadSavedHomeOrBundled();
+        }
+    }
+
+    private void loadSavedHomeOrBundled() {
         offlineModeLoaded = true;
         tryingCachedHome = false;
+        hideLoading();
+        hideOffline();
+        File saved = new File(getFilesDir(), ARCHIVE_NAME);
+        if (saved.exists() && saved.length() > 0) {
+            loadingOfflineArchive = true;
+            webView.getSettings().setAllowFileAccess(true);
+            webView.getSettings().setJavaScriptEnabled(true);
+            webView.loadUrl(Uri.fromFile(saved).toString());
+        } else {
+            showBundledOfflineHome();
+        }
+    }
+
+    private void showBundledOfflineHome() {
+        loadingOfflineArchive = false;
+        offlineModeLoaded = true;
         hideLoading();
         hideOffline();
         webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
