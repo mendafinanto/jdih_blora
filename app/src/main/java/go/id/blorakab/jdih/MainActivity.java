@@ -182,7 +182,7 @@ public class MainActivity extends Activity {
                 webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
                 webView.loadUrl(lastPageUrl);
             } else {
-                openCachedHome();
+                showOfflineHome();
             }
         });
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(-2, -2);
