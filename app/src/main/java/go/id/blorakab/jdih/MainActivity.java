@@ -36,14 +36,12 @@ public class MainActivity extends Activity {
     private boolean tryingCachedHome = false;
     private String lastPageUrl = HOME;
     private SharedPreferences preferences;
+    private boolean offlineModeLoaded = false;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         preferences = getSharedPreferences("jdih_app", MODE_PRIVATE);
-        lastPageUrl = preferences.getString("last_page_url", HOME);
-        preferences = getSharedPreferences("jdih_app", MODE_PRIVATE);
-        lastPageUrl = preferences.getString("last_page_url", HOME);
         buildScreen();
 
         WebSettings s = webView.getSettings();
@@ -52,9 +50,8 @@ public class MainActivity extends Activity {
         s.setDatabaseEnabled(true);
         s.setLoadsImagesAutomatically(true);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        s.setAllowFileAccess(false);
+        s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
         s.setSupportZoom(true);
         s.setBuiltInZoomControls(true);
@@ -72,6 +69,7 @@ public class MainActivity extends Activity {
             private boolean route(Uri u) {
                 String scheme = u.getScheme() == null ? "" : u.getScheme();
                 String host = u.getHost() == null ? "" : u.getHost().toLowerCase();
+                if ("jdihapp".equals(scheme) && "retry".equals(host)) { loadHome(); return true; }
                 if ("https".equals(scheme) && (host.equals("jdih.blorakab.go.id") || host.endsWith(".blorakab.go.id"))) return false;
                 if ("http".equals(scheme) || "https".equals(scheme) || "mailto".equals(scheme) || "tel".equals(scheme)) {
                     try { startActivity(new Intent(Intent.ACTION_VIEW, u)); }
@@ -85,10 +83,13 @@ public class MainActivity extends Activity {
             @Override public void onPageFinished(WebView view, String url) {
                 hideLoading();
                 hideOffline();
-                tryingCachedHome = false;
-                lastPageUrl = url;
-                preferences.edit().putString("last_page_url", url).apply();
-                view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                if (url.startsWith("https://jdih.blorakab.go.id")) {
+                    tryingCachedHome = false;
+                    offlineModeLoaded = false;
+                    lastPageUrl = url;
+                    preferences.edit().putString("last_page_url", url).apply();
+                    view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                }
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
@@ -203,23 +204,28 @@ public class MainActivity extends Activity {
 
     private void loadHome() {
         hideOffline();
-        showLoading();
-        if (!hasConnection()) { openCachedHome(); return; }
-        webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
-        webView.loadUrl(HOME);
+        if (hasConnection()) {
+            showLoading();
+            offlineModeLoaded = false;
+            webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+            webView.loadUrl(HOME);
+        } else {
+            showOfflineHome();
+        }
     }
 
     private void handleMainFrameError() {
-        if (!tryingCachedHome) openCachedHome();
-        else showOffline();
+        if (!offlineModeLoaded) showOfflineHome();
     }
 
-    private void openCachedHome() {
-        tryingCachedHome = true;
+    // Beranda offline disimpan sebagai file HTML di dalam APK, bukan mengandalkan cache server.
+    private void showOfflineHome() {
+        offlineModeLoaded = true;
+        tryingCachedHome = false;
+        hideLoading();
         hideOffline();
-        showLoading();
-        webView.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
-        webView.loadUrl(HOME);
+        webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+        webView.loadUrl("file:///android_asset/offline_home.html");
     }
 
     private void showLoading() { loadingView.setVisibility(View.VISIBLE); }
