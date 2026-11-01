@@ -36,10 +36,15 @@ public class MainActivity extends Activity {
     private boolean tryingCachedHome = false;
     private String lastPageUrl = HOME;
     private SharedPreferences preferences;
+    private boolean tryingCachedHome = false;
+    private String lastPageUrl = HOME;
+    private SharedPreferences preferences;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        preferences = getSharedPreferences("jdih_app", MODE_PRIVATE);
+        lastPageUrl = preferences.getString("last_page_url", HOME);
         preferences = getSharedPreferences("jdih_app", MODE_PRIVATE);
         lastPageUrl = preferences.getString("last_page_url", HOME);
         buildScreen();
@@ -49,6 +54,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
         s.setLoadsImagesAutomatically(true);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setAllowFileAccess(false);
@@ -82,6 +88,10 @@ public class MainActivity extends Activity {
             @Override public void onPageFinished(WebView view, String url) {
                 hideLoading();
                 hideOffline();
+                tryingCachedHome = false;
+                lastPageUrl = url;
+                preferences.edit().putString("last_page_url", url).apply();
+                view.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
@@ -169,8 +179,13 @@ public class MainActivity extends Activity {
         Button retry = new Button(this);
         retry.setText("Coba Lagi");
         retry.setOnClickListener(v -> {
-            if (hasConnection()) loadHome();
-            else Toast.makeText(this, "Periksa koneksi internet Anda", Toast.LENGTH_SHORT).show();
+            if (hasConnection()) {
+                hideOffline(); showLoading();
+                webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                webView.loadUrl(lastPageUrl);
+            } else {
+                openCachedHome();
+            }
         });
         LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(-2, -2);
         btnLp.topMargin = dp(22);
@@ -192,6 +207,21 @@ public class MainActivity extends Activity {
     private void loadHome() {
         hideOffline();
         showLoading();
+        if (!hasConnection()) { openCachedHome(); return; }
+        webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+        webView.loadUrl(HOME);
+    }
+
+    private void handleMainFrameError() {
+        if (!tryingCachedHome) openCachedHome();
+        else showOffline();
+    }
+
+    private void openCachedHome() {
+        tryingCachedHome = true;
+        hideOffline();
+        showLoading();
+        webView.getSettings().setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
         webView.loadUrl(HOME);
     }
 
