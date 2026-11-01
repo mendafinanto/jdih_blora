@@ -40,13 +40,16 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-        preferences = getSharedPreferences("jdih_app", MODE_PRIVATE);\n        lastPageUrl = preferences.getString("last_page_url", HOME);\n        buildScreen();
+        preferences = getSharedPreferences("jdih_app", MODE_PRIVATE);
+        lastPageUrl = preferences.getString("last_page_url", HOME);
+        buildScreen();
 
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setLoadsImagesAutomatically(true);\n        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setLoadsImagesAutomatically(true);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
