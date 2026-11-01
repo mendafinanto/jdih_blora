@@ -99,11 +99,8 @@ public class MainActivity extends Activity {
             catch (Exception e) { Toast.makeText(this, "Tidak dapat membuka file unduhan", Toast.LENGTH_LONG).show(); }
         });
 
-        if (savedInstanceState != null) {
-            if (webView.restoreState(savedInstanceState) == null) loadHome();
-        } else {
-            loadHome();
-        }
+        // Setiap aplikasi dibuka ulang, mulai dari beranda.
+        loadHome();
     }
 
     private void buildScreen() {
