@@ -18,6 +18,7 @@ import android.webkit.WebResourceError;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.content.SharedPreferences;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -32,17 +33,20 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private View loadingView;
     private View offlineView;
+    private boolean tryingCachedHome = false;
+    private String lastPageUrl = HOME;
+    private SharedPreferences preferences;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
-        buildScreen();
+        preferences = getSharedPreferences("jdih_app", MODE_PRIVATE);\n        lastPageUrl = preferences.getString("last_page_url", HOME);\n        buildScreen();
 
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setLoadsImagesAutomatically(true);
+        s.setLoadsImagesAutomatically(true);\n        s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
@@ -78,12 +82,12 @@ public class MainActivity extends Activity {
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
-                if (request.isForMainFrame()) showOffline();
+                if (request.isForMainFrame()) handleMainFrameError();
             }
             @SuppressWarnings("deprecation")
             @Override public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 super.onReceivedError(view, errorCode, description, failingUrl);
-                if (android.os.Build.VERSION.SDK_INT < 23) showOffline();
+                if (android.os.Build.VERSION.SDK_INT < 23) handleMainFrameError();
             }
         });
         webView.setWebChromeClient(new WebChromeClient());
