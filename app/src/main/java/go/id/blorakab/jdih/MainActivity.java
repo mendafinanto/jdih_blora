@@ -36,9 +36,6 @@ public class MainActivity extends Activity {
     private boolean tryingCachedHome = false;
     private String lastPageUrl = HOME;
     private SharedPreferences preferences;
-    private boolean tryingCachedHome = false;
-    private String lastPageUrl = HOME;
-    private SharedPreferences preferences;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
