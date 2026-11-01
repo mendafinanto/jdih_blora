@@ -4,8 +4,8 @@
     <application
         android:allowBackup="false"
         android:label="JDIH Kabupaten Blora"
-        android:icon="@drawable/ic_jdih"
-        android:roundIcon="@drawable/ic_jdih"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="false"
         android:supportsRtl="true">
