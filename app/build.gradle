@@ -1,0 +1,30 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'go.id.blorakab.jdih'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'go.id.blorakab.jdih'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+    signingConfigs {
+        release {
+            if (System.getenv('JDIH_STORE_FILE')) {
+                storeFile file(System.getenv('JDIH_STORE_FILE'))
+                storePassword System.getenv('JDIH_STORE_PASSWORD')
+                keyAlias System.getenv('JDIH_KEY_ALIAS')
+                keyPassword System.getenv('JDIH_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug { }
+        release {
+            minifyEnabled false
+            if (System.getenv('JDIH_STORE_FILE')) signingConfig signingConfigs.release
+        }
+    }
+}
