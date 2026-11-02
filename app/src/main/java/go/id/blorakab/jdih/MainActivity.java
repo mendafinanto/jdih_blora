@@ -1,11 +1,14 @@
 package go.id.blorakab.jdih;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.view.View;
+import android.view.MotionEvent;
 import android.view.Gravity;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -43,6 +46,9 @@ public class MainActivity extends Activity {
     private boolean loadingOfflineArchive = false;
     private final Handler archiveHandler = new Handler(Looper.getMainLooper());
     private static final String ARCHIVE_NAME = "jdih-home.mhtml";
+    private boolean offlineDialogShowing = false;
+    private float touchStartY = 0f;
+    private boolean pullRefreshTriggered = false;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -126,6 +132,7 @@ public class MainActivity extends Activity {
         root = new FrameLayout(this);
         webView = new WebView(this);
         root.addView(webView, new FrameLayout.LayoutParams(-1, -1));
+        webView.setOnTouchListener((v, event) -> handlePullToRefresh(event));
         loadingView = createLoadingView();
         offlineView = createOfflineView();
         root.addView(loadingView, new FrameLayout.LayoutParams(-1, -1));
@@ -138,22 +145,48 @@ public class MainActivity extends Activity {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setGravity(Gravity.CENTER);
-        panel.setBackgroundColor(Color.WHITE);
+        panel.setPadding(dp(30), dp(30), dp(30), dp(30));
+        GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{Color.rgb(12, 48, 91), Color.rgb(22, 105, 158)});
+        panel.setBackground(bg);
+
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.ic_launcher);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(148), dp(148));
-        lp.bottomMargin = dp(22);
-        panel.addView(logo, lp);
-        ProgressBar progress = new ProgressBar(this);
-        panel.addView(progress, new LinearLayout.LayoutParams(dp(42), dp(42)));
+        LinearLayout.LayoutParams logoLp = new LinearLayout.LayoutParams(dp(126), dp(126));
+        logoLp.bottomMargin = dp(24);
+        panel.addView(logo, logoLp);
+
+        TextView title = new TextView(this);
+        title.setText("JDIH KABUPATEN BLORA");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(19);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        title.setGravity(Gravity.CENTER);
+        panel.addView(title);
+
+        TextView subtitle = new TextView(this);
+        subtitle.setText("Jaringan Dokumentasi dan Informasi Hukum");
+        subtitle.setTextColor(Color.rgb(220, 235, 248));
+        subtitle.setTextSize(12);
+        subtitle.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
+        subLp.topMargin = dp(7);
+        panel.addView(subtitle, subLp);
+
+        ProgressBar progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setIndeterminate(true);
+        LinearLayout.LayoutParams progressLp = new LinearLayout.LayoutParams(dp(190), dp(4));
+        progressLp.topMargin = dp(30);
+        panel.addView(progress, progressLp);
+
         TextView label = new TextView(this);
-        label.setText("Memuat JDIH Kabupaten Blora...");
-        label.setTextColor(Color.rgb(75, 75, 75));
-        label.setTextSize(14);
+        label.setText("Menyiapkan informasi hukum untuk Anda...");
+        label.setTextColor(Color.WHITE);
+        label.setTextSize(13);
         label.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams textLp = new LinearLayout.LayoutParams(-2, -2);
-        textLp.topMargin = dp(14);
+        LinearLayout.LayoutParams textLp = new LinearLayout.LayoutParams(-1, -2);
+        textLp.topMargin = dp(16);
         panel.addView(label, textLp);
         return panel;
     }
@@ -222,6 +255,7 @@ public class MainActivity extends Activity {
             webView.loadUrl(HOME);
         } else {
             loadSavedHomeOrBundled();
+            showOfflineDialog();
         }
     }
 
@@ -280,6 +314,7 @@ public class MainActivity extends Activity {
             showBundledOfflineHome();
         } else if (!offlineModeLoaded) {
             loadSavedHomeOrBundled();
+            showOfflineDialog();
         }
     }
 
@@ -306,6 +341,60 @@ public class MainActivity extends Activity {
         hideOffline();
         webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
         webView.loadUrl("file:///android_asset/offline_home.html");
+    }
+
+    private void showOfflineDialog() {
+        if (isFinishing() || offlineDialogShowing) return;
+        offlineDialogShowing = true;
+        new AlertDialog.Builder(this)
+                .setTitle("Tidak Terhubung ke Internet")
+                .setMessage("Anda tidak terhubung ke internet. Periksa koneksi, lalu pilih Reload untuk mencoba kembali atau Tutup untuk keluar dari aplikasi.")
+                .setCancelable(false)
+                .setNegativeButton("Tutup", (dialog, which) -> {
+                    offlineDialogShowing = false;
+                    finish();
+                })
+                .setPositiveButton("Reload", (dialog, which) -> {
+                    offlineDialogShowing = false;
+                    if (hasConnection()) {
+                        offlineModeLoaded = false;
+                        loadingOfflineArchive = false;
+                        webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                        webView.loadUrl(lastPageUrl == null ? HOME : lastPageUrl);
+                    } else {
+                        loadSavedHomeOrBundled();
+                        showOfflineDialog();
+                    }
+                })
+                .setOnCancelListener(dialog -> offlineDialogShowing = false)
+                .show();
+    }
+
+    private boolean handlePullToRefresh(MotionEvent event) {
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                touchStartY = event.getY();
+                pullRefreshTriggered = false;
+                break;
+            case MotionEvent.ACTION_MOVE:
+                float distance = event.getY() - touchStartY;
+                if (!pullRefreshTriggered && distance > dp(105) && webView.getScrollY() <= 0) {
+                    pullRefreshTriggered = true;
+                    if (hasConnection()) {
+                        webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+                        webView.reload();
+                        showLoading();
+                    } else {
+                        showOfflineDialog();
+                    }
+                }
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                pullRefreshTriggered = false;
+                break;
+        }
+        return false;
     }
 
     private void showLoading() { loadingView.setVisibility(View.VISIBLE); }
