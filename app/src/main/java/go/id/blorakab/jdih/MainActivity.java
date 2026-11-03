@@ -49,6 +49,18 @@ public class MainActivity extends Activity {
     private boolean offlineDialogShowing = false;
     private float touchStartY = 0f;
     private boolean pullRefreshTriggered = false;
+    private boolean pullRefreshHolding = false;
+    private final Runnable delayedPullRefresh = () -> {
+        if (!pullRefreshHolding || pullRefreshTriggered) return;
+        pullRefreshTriggered = true;
+        if (hasConnection()) {
+            webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
+            webView.reload();
+            showLoading();
+        } else {
+            showOfflineDialog();
+        }
+    };
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -375,22 +387,28 @@ public class MainActivity extends Activity {
             case MotionEvent.ACTION_DOWN:
                 touchStartY = event.getY();
                 pullRefreshTriggered = false;
+                pullRefreshHolding = false;
+                archiveHandler.removeCallbacks(delayedPullRefresh);
                 break;
+
             case MotionEvent.ACTION_MOVE:
                 float distance = event.getY() - touchStartY;
-                if (!pullRefreshTriggered && distance > dp(105) && webView.getScrollY() <= 0) {
-                    pullRefreshTriggered = true;
-                    if (hasConnection()) {
-                        webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
-                        webView.reload();
-                        showLoading();
-                    } else {
-                        showOfflineDialog();
-                    }
+                if (!pullRefreshHolding && !pullRefreshTriggered
+                        && distance > dp(110) && webView.getScrollY() <= 0) {
+                    // Harus ditarik melewati batas lalu ditahan selama 900 ms.
+                    pullRefreshHolding = true;
+                    archiveHandler.postDelayed(delayedPullRefresh, 900);
+                }
+                if (distance <= dp(65)) {
+                    pullRefreshHolding = false;
+                    archiveHandler.removeCallbacks(delayedPullRefresh);
                 }
                 break;
+
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                pullRefreshHolding = false;
+                archiveHandler.removeCallbacks(delayedPullRefresh);
                 pullRefreshTriggered = false;
                 break;
         }
