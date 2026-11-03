@@ -39,6 +39,7 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private View loadingView;
     private View offlineView;
+    private TextView pullRefreshHint;
     private boolean tryingCachedHome = false;
     private String lastPageUrl = HOME;
     private SharedPreferences preferences;
@@ -55,6 +56,7 @@ public class MainActivity extends Activity {
     private final Runnable delayedPullRefresh = () -> {
         if (!pullRefreshHolding || pullRefreshTriggered) return;
         pullRefreshTriggered = true;
+        if (pullRefreshHint != null) pullRefreshHint.setText("⟳  Memuat ulang...");
         if (hasConnection()) {
             webView.getSettings().setCacheMode(WebSettings.LOAD_DEFAULT);
             webView.reload();
@@ -152,6 +154,22 @@ public class MainActivity extends Activity {
         root.addView(loadingView, new FrameLayout.LayoutParams(-1, -1));
         root.addView(offlineView, new FrameLayout.LayoutParams(-1, -1));
         offlineView.setVisibility(View.GONE);
+        pullRefreshHint = new TextView(this);
+        pullRefreshHint.setText("↓  Tahan untuk refresh");
+        pullRefreshHint.setTextColor(Color.WHITE);
+        pullRefreshHint.setTextSize(13);
+        pullRefreshHint.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        pullRefreshHint.setGravity(Gravity.CENTER);
+        pullRefreshHint.setPadding(dp(18), dp(10), dp(18), dp(10));
+        GradientDrawable hintBg = new GradientDrawable();
+        hintBg.setColor(Color.rgb(18, 75, 125));
+        hintBg.setCornerRadius(dp(24));
+        pullRefreshHint.setBackground(hintBg);
+        pullRefreshHint.setElevation(dp(6));
+        pullRefreshHint.setVisibility(View.GONE);
+        FrameLayout.LayoutParams hintLp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        hintLp.topMargin = dp(14);
+        root.addView(pullRefreshHint, hintLp);
         setContentView(root);
     }
 
@@ -401,17 +419,22 @@ public class MainActivity extends Activity {
                 if (webView.getScrollY() > 0 || distance < dp(80)) {
                     pullRefreshHolding = false;
                     archiveHandler.removeCallbacks(delayedPullRefresh);
+                    if (pullRefreshHint != null) pullRefreshHint.setVisibility(View.GONE);
                     break;
                 }
 
                 // Mulai timer saat melewati batas. Getaran kecil tidak membatalkan timer.
                 if (!pullRefreshTriggered && !pullRefreshHolding) {
                     pullRefreshHolding = true;
-                    archiveHandler.postDelayed(delayedPullRefresh, 1000L);
+                    if (pullRefreshHint != null) {
+                        pullRefreshHint.setText("↓  Tahan untuk refresh");
+                        pullRefreshHint.setVisibility(View.VISIBLE);
+                    }
+                    archiveHandler.postDelayed(delayedPullRefresh, 500L);
                 } else if (pullRefreshHolding && movement > dp(35)) {
                     // Jika masih menggeser cukup jauh, hitung ulang waktu tahan.
                     archiveHandler.removeCallbacks(delayedPullRefresh);
-                    archiveHandler.postDelayed(delayedPullRefresh, 1000L);
+                    archiveHandler.postDelayed(delayedPullRefresh, 500L);
                 }
                 break;
             case MotionEvent.ACTION_UP:
@@ -419,6 +442,7 @@ public class MainActivity extends Activity {
                 if (!pullRefreshTriggered) {
                     pullRefreshHolding = false;
                     archiveHandler.removeCallbacks(delayedPullRefresh);
+                    if (pullRefreshHint != null) pullRefreshHint.setVisibility(View.GONE);
                 }
                 break;
         }
