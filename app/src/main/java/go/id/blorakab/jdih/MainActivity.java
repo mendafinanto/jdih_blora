@@ -48,6 +48,8 @@ public class MainActivity extends Activity {
     private static final String ARCHIVE_NAME = "jdih-home.mhtml";
     private boolean offlineDialogShowing = false;
     private float touchStartY = 0f;
+    private float lastTouchY = 0f;
+    private static final long PULL_HOLD_DURATION_MS = 1500L;
     private boolean pullRefreshTriggered = false;
     private boolean pullRefreshHolding = false;
     private final Runnable delayedPullRefresh = () -> {
@@ -386,6 +388,7 @@ public class MainActivity extends Activity {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 touchStartY = event.getY();
+                lastTouchY = event.getY();
                 pullRefreshTriggered = false;
                 pullRefreshHolding = false;
                 archiveHandler.removeCallbacks(delayedPullRefresh);
@@ -393,15 +396,20 @@ public class MainActivity extends Activity {
 
             case MotionEvent.ACTION_MOVE:
                 float distance = event.getY() - touchStartY;
-                if (!pullRefreshHolding && !pullRefreshTriggered
-                        && distance > dp(110) && webView.getScrollY() <= 0) {
-                    // Harus ditarik melewati batas lalu ditahan selama 900 ms.
-                    pullRefreshHolding = true;
-                    archiveHandler.postDelayed(delayedPullRefresh, 900);
-                }
-                if (distance <= dp(65)) {
+                float movementSinceLast = Math.abs(event.getY() - lastTouchY);
+                lastTouchY = event.getY();
+
+                if (webView.getScrollY() > 0 || distance < dp(125)) {
                     pullRefreshHolding = false;
                     archiveHandler.removeCallbacks(delayedPullRefresh);
+                    break;
+                }
+
+                // Refresh hanya jika tarikan sudah cukup jauh dan jari diam selama 1,5 detik.
+                if (!pullRefreshTriggered && (movementSinceLast > dp(3) || !pullRefreshHolding)) {
+                    pullRefreshHolding = true;
+                    archiveHandler.removeCallbacks(delayedPullRefresh);
+                    archiveHandler.postDelayed(delayedPullRefresh, PULL_HOLD_DURATION_MS);
                 }
                 break;
 
